@@ -1,0 +1,252 @@
+import { parseVocabJSON, validateVocabItem, AIFormatError, formatWithAI } from '@/lib/aiFormat';
+
+// ---------------------------------------------------------------------------
+// validateVocabItem
+// ---------------------------------------------------------------------------
+describe('validateVocabItem', () => {
+  it('returns true for a fully valid item', () => {
+    expect(
+      validateVocabItem({
+        word: '学校',
+        reading: 'がっこう',
+        hanviet: 'Học Hiệu',
+        meaning: 'Trường học',
+      })
+    ).toBe(true);
+  });
+
+  it('returns false for null', () => {
+    expect(validateVocabItem(null)).toBe(false);
+  });
+
+  it('returns false for a number', () => {
+    expect(validateVocabItem(42)).toBe(false);
+  });
+
+  it('returns false for a string', () => {
+    expect(validateVocabItem('hello')).toBe(false);
+  });
+
+  it('returns false when word is missing', () => {
+    expect(
+      validateVocabItem({ reading: 'がっこう', hanviet: 'Học Hiệu', meaning: 'Trường học' })
+    ).toBe(false);
+  });
+
+  it('returns false when reading is missing', () => {
+    expect(
+      validateVocabItem({ word: '学校', hanviet: 'Học Hiệu', meaning: 'Trường học' })
+    ).toBe(false);
+  });
+
+  it('returns false when hanviet is missing', () => {
+    expect(
+      validateVocabItem({ word: '学校', reading: 'がっこう', meaning: 'Trường học' })
+    ).toBe(false);
+  });
+
+  it('returns false when meaning is missing', () => {
+    expect(
+      validateVocabItem({ word: '学校', reading: 'がっこう', hanviet: 'Học Hiệu' })
+    ).toBe(false);
+  });
+
+  it('returns false when word is an empty string', () => {
+    expect(
+      validateVocabItem({ word: '', reading: 'がっこう', hanviet: 'Học Hiệu', meaning: 'Trường học' })
+    ).toBe(false);
+  });
+
+  it('returns false when word is only whitespace', () => {
+    expect(
+      validateVocabItem({ word: '   ', reading: 'がっこう', hanviet: 'Học Hiệu', meaning: 'Trường học' })
+    ).toBe(false);
+  });
+
+  it('returns false when reading is an empty string', () => {
+    expect(
+      validateVocabItem({ word: '学校', reading: '', hanviet: 'Học Hiệu', meaning: 'Trường học' })
+    ).toBe(false);
+  });
+
+  it('accepts extra properties (id, extraField)', () => {
+    expect(
+      validateVocabItem({
+        id: 'some-id',
+        word: '学校',
+        reading: 'がっこう',
+        hanviet: 'Học Hiệu',
+        meaning: 'Trường học',
+        extra: 'ignored',
+      })
+    ).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// parseVocabJSON
+// ---------------------------------------------------------------------------
+describe('parseVocabJSON', () => {
+  it('parses a valid JSON array with one item', () => {
+    const json = JSON.stringify([
+      { word: '学校', reading: 'がっこう', hanviet: 'Học Hiệu', meaning: 'Trường học' },
+    ]);
+    const result = parseVocabJSON(json);
+    expect(result).toHaveLength(1);
+    expect(result[0].word).toBe('学校');
+    expect(result[0].reading).toBe('がっこう');
+    expect(result[0].hanviet).toBe('Học Hiệu');
+    expect(result[0].meaning).toBe('Trường học');
+  });
+
+  it('parses a valid JSON array with multiple items', () => {
+    const json = JSON.stringify([
+      { word: '学校', reading: 'がっこう', hanviet: 'Học Hiệu', meaning: 'Trường học' },
+      { word: '先生', reading: 'せんせい', hanviet: 'Tiên Sinh', meaning: 'Giáo viên' },
+    ]);
+    const result = parseVocabJSON(json);
+    expect(result).toHaveLength(2);
+  });
+
+  it('throws on invalid JSON string', () => {
+    expect(() => parseVocabJSON('not json at all')).toThrow();
+  });
+
+  it('throws when JSON is a plain object, not an array', () => {
+    expect(() => parseVocabJSON('{"word":"test"}')).toThrow();
+  });
+
+  it('throws on an empty array (no valid items)', () => {
+    expect(() => parseVocabJSON('[]')).toThrow();
+  });
+
+  it('throws when all items are invalid', () => {
+    const json = JSON.stringify([{ not: 'valid' }, { also: 'invalid' }]);
+    expect(() => parseVocabJSON(json)).toThrow();
+  });
+
+  it('silently filters out invalid items and keeps valid ones', () => {
+    const json = JSON.stringify([
+      { word: '学校', reading: 'がっこう', hanviet: 'Học Hiệu', meaning: 'Trường học' },
+      { word: '', reading: 'がっこう', hanviet: 'x', meaning: 'y' }, // empty word
+      { not: 'a vocab item' }, // missing all required fields
+    ]);
+    const result = parseVocabJSON(json);
+    expect(result).toHaveLength(1);
+    expect(result[0].word).toBe('学校');
+  });
+
+  it('preserves extra properties (does not strip them)', () => {
+    const json = JSON.stringify([
+      {
+        word: '学校',
+        reading: 'がっこう',
+        hanviet: 'Học Hiệu',
+        meaning: 'Trường học',
+        extraField: 'kept',
+      },
+    ]);
+    const result = parseVocabJSON(json);
+    expect(result).toHaveLength(1);
+    // parseVocabJSON does not strip unknown fields — it filters valid items
+    // The id field should NOT be generated by parseVocabJSON
+    expect(result[0]).not.toHaveProperty('id');
+  });
+
+  it('does not generate an id field on parsed items', () => {
+    const json = JSON.stringify([
+      { word: '学校', reading: 'がっこう', hanviet: 'Học Hiệu', meaning: 'Trường học' },
+    ]);
+    const result = parseVocabJSON(json);
+    expect(result[0]).not.toHaveProperty('id');
+  });
+
+  it('throws on JSON null', () => {
+    expect(() => parseVocabJSON('null')).toThrow();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// AIFormatError
+// ---------------------------------------------------------------------------
+describe('AIFormatError', () => {
+  it('is an instance of Error', () => {
+    const err = new AIFormatError('test message');
+    expect(err).toBeInstanceOf(Error);
+  });
+
+  it('has name "AIFormatError"', () => {
+    const err = new AIFormatError('test message');
+    expect(err.name).toBe('AIFormatError');
+  });
+
+  it('stores message correctly', () => {
+    const err = new AIFormatError('something went wrong');
+    expect(err.message).toBe('something went wrong');
+  });
+
+  it('stores optional statusCode', () => {
+    const err = new AIFormatError('rate limited', 429);
+    expect(err.statusCode).toBe(429);
+  });
+
+  it('statusCode is undefined when not provided', () => {
+    const err = new AIFormatError('no status');
+    expect(err.statusCode).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// formatWithAI (network layer)
+// ---------------------------------------------------------------------------
+describe('formatWithAI', () => {
+  beforeEach(() => {
+    global.fetch = jest.fn();
+  });
+
+  afterEach(() => {
+    jest.resetAllMocks();
+  });
+
+  it('throws AIFormatError immediately for empty input', async () => {
+    await expect(formatWithAI('')).rejects.toBeInstanceOf(AIFormatError);
+    await expect(formatWithAI('   ')).rejects.toBeInstanceOf(AIFormatError);
+  });
+
+  it('throws AIFormatError on network failure', async () => {
+    (global.fetch as jest.Mock).mockRejectedValueOnce(new Error('Network error'));
+    await expect(formatWithAI('学校')).rejects.toBeInstanceOf(AIFormatError);
+  });
+
+  it('throws AIFormatError with statusCode when server returns 4xx/5xx', async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: false,
+      status: 429,
+      json: async () => ({ error: 'Rate limit exceeded' }),
+    } as Response);
+    const err = await formatWithAI('学校').catch((e) => e);
+    expect(err).toBeInstanceOf(AIFormatError);
+    expect(err.statusCode).toBe(429);
+    expect(err.message).toBe('Rate limit exceeded');
+  });
+
+  it('throws AIFormatError when response body is not an array', async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ word: '学校' }),
+    } as Response);
+    await expect(formatWithAI('学校')).rejects.toBeInstanceOf(AIFormatError);
+  });
+
+  it('returns vocab array on success', async () => {
+    const mockData = [
+      { word: '学校', reading: 'がっこう', hanviet: 'Học Hiệu', meaning: 'Trường học' },
+    ];
+    (global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => mockData,
+    } as Response);
+    const result = await formatWithAI('学校');
+    expect(result).toEqual(mockData);
+  });
+});
