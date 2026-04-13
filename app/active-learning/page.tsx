@@ -48,9 +48,9 @@ export default function ActiveLearningPage() {
           {activeDeck && <ModeSelector />}
         </div>
 
-        {/* Storage disclaimer */}
+        {/* Sync status */}
         <p className="text-center text-xs text-slate-400 mt-8">
-          Dữ liệu lưu trữ trong localStorage trên trình duyệt của bạn
+          ☁️ Dữ liệu được đồng bộ lên đám mây
         </p>
       </div>
     </main>
